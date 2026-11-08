@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tower of Hanoi — Prolog Visualizer</title>
+<style>
+:root { color-scheme: dark; --bg:#071426; --panel:#0c2039; --line:#164a7d; --blue:#1685ff; --text:#e8f2ff; --muted:#a9c5e8; }
+* { box-sizing:border-box }
+body { margin:0; background:radial-gradient(ellipse at top,#102b4b 0,#071426 60%); color:var(--text); font:16px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; }
+main { max-width:1100px; margin:auto; padding:24px 18px 40px; }
+header { display:flex; gap:16px; align-items:center; margin-bottom:20px; }
+.logo { font-size:44px; }
+h1 { margin:0; font-size:clamp(28px,4vw,42px); line-height:1.1; }
+h1 span { color:#2795ff; }
+.subtitle { color:var(--muted); margin-top:5px; }
+.panel { background:rgba(12,32,57,.92); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:0 10px 30px #0002; }
+.controls { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-bottom:18px; }
+label { color:var(--muted); font-size:14px; display:block; margin-bottom:5px; }
+select,button { font:inherit; color:var(--text); border-radius:9px; border:1px solid #2b5d8d; background:#102b4b; padding:10px 13px; }
+button { cursor:pointer; font-weight:650; }
+button.primary { background:var(--blue); border-color:var(--blue); min-width:112px; }
+button:disabled { opacity:.45; cursor:not-allowed; }
+.control-group { min-width:125px; }
+input[type=range] { accent-color:var(--blue); width:150px; vertical-align:middle; }
+.stat { padding:4px 16px; border-left:1px solid #244767; }
+.stat b { display:block; font-size:22px; }
+.stat span { color:var(--muted); font-size:13px; }
+#status { margin-left:auto; color:#72e4ad; font-weight:650; }
+.board { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:18px; }
+.peg-card { background:#081a2e; border:1px solid #173f69; border-radius:12px; padding:10px; min-width:0; }
+.peg-title { text-align:center; font-weight:750; color:#9fcaff; margin-bottom:5px; }
+.tower { height:270px; position:relative; overflow:hidden; border-radius:8px; background:linear-gradient(#091c31,#0b2541); }
+.rod { position:absolute; bottom:47px; width:8px; height:180px; background:linear-gradient(90deg,#9b673f,#e2b17a,#9b673f); border-radius:5px; transform:translateX(-50%); }
+.base { position:absolute; bottom:40px; height:12px; width:90%; left:5%; border-radius:8px; background:linear-gradient(#d6a16b,#89542e); box-shadow:0 3px 0 #59391f; }
+.disk { position:absolute; height:20px; border-radius:8px; transform:translateX(-50%); border:1px solid #ffffff55; box-shadow:inset 0 3px 3px #ffffff22,0 2px 3px #0006; z-index:2; }
+.move-panel { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+h2 { font-size:18px; margin:0 0 10px; }
+#moveLog { margin:0; padding:0; list-style:none; max-height:230px; overflow:auto; }
+#moveLog li { padding:7px 9px; border-bottom:1px solid #173550; color:var(--muted); font-size:14px; }
+#moveLog li.active { background:#123d66; color:white; border-radius:6px; }
+code,pre { color:#b8dcff; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#07182a; border:1px solid #173550; border-radius:8px; padding:12px; font-size:12px; }
+.note { color:var(--muted); font-size:13px; margin-top:12px; }
+@media(max-width:700px) { .board{gap:6px}.tower{height:220px}.rod{height:140px}.move-panel{grid-template-columns:1fr}.stat{padding:4px 8px} .disk{height:16px} }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div class="logo" aria-hidden="true">🗼</div>
+  <div><h1>Tower of <span>Hanoi</span></h1><div class="subtitle">Animated puzzle solver powered by SWI-Prolog</div></div>
+</header>
+
+<section class="panel controls" aria-label="Animation controls">
+  <div class="control-group"><label for="diskCount">Number of disks</label>
+    <select id="diskCount">
+      <option>1</option><option>2</option><option selected>3</option><option>4</option>
+      <option>5</option><option>6</option><option>7</option><option>8</option>
+    </select>
+  </div>
+  <button class="primary" id="startBtn">▶ Start</button>
+  <button id="pauseBtn" disabled>Ⅱ Pause</button>
+  <button id="resetBtn">↺ Reset</button>
+  <div class="stat"><span>Total moves</span><b id="totalMoves">7</b></div>
+  <div class="stat"><span>Current move</span><b id="currentMove">0 / 7</b></div>
+  <div class="control-group"><label for="speed">Speed <span id="speedLabel">Normal</span></label>
+    <input id="speed" type="range" min="1" max="5" value="3">
+  </div>
+  <div id="status" role="status">Ready</div>
+</section>
+
+<section class="board" aria-label="Tower of Hanoi board">
+  <div class="peg-card"><div class="peg-title">PEG A · SOURCE</div><div class="tower" id="tower-a"></div></div>
+  <div class="peg-card"><div class="peg-title">PEG B · AUXILIARY</div><div class="tower" id="tower-b"></div></div>
+  <div class="peg-card"><div class="peg-title">PEG C · DESTINATION</div><div class="tower" id="tower-c"></div></div>
+</section>
+
+<section class="move-panel">
+  <div class="panel"><h2>📋 Move log</h2><ol id="moveLog"><li>Choose a disk count and press Start.</li></ol></div>
+  <div class="panel"><h2>💡 How it works</h2>
+    <pre>hanoi(1, Source, Destination, _) :-
+    write('Move disk from '), write(Source),
+    write(' to '), write(Destination), nl.
+
+hanoi(N, Source, Destination, Auxiliary) :-
+    N > 1,
+    N1 is N - 1,
+    hanoi(N1, Source, Auxiliary, Destination),
+    write('Move disk from '), write(Source),
+    write(' to '), write(Destination), nl,
+    hanoi(N1, Auxiliary, Destination, Source).</pre>
+    <div class="note">Prolog calculates the ordered moves through recursion. This page requests that move list from the Prolog server and animates each disk in the browser.</div>
+  </div>
+</section>
+<p class="note">Rule: only one disk moves at a time, and a larger disk may never be placed on top of a smaller disk. Minimum moves: 2<sup>n</sup> − 1.</p>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const colors = ['#2587f7','#ffb62e','#f04452','#27c6a0','#b18cff','#ff7b35','#f472b6','#a3e635'];
+let n = 3, moves = [], moveIndex = 0, stacks = {}, running = false, paused = false, timer = null, token = 0;
+const pegX = {a: 50, b: 50, c: 50};
+
+function delay() { return [1800, 1250, 850, 520, 300][+$('speed').value - 1]; }
+function drawBoard() {
+  for (const p of ['a','b','c']) {
+    const tower = $('tower-'+p);
+    tower.innerHTML = '<div class="rod" style="left:50%"></div><div class="base"></div>';
+    stacks[p].forEach((disk, level) => {
+      const el = document.createElement('div');
+      el.className = 'disk'; el.id = 'disk-'+disk;
+      const width = 34 + (disk / n) * Math.min(150, Math.max(80, 145 - n*5));
+      el.style.width = width+'px'; el.style.left='50%';
+      el.style.bottom=(52 + level*22)+'px';
+      el.style.background=colors[(disk-1)%colors.length];
+      el.title='Disk '+disk;
+      tower.appendChild(el);
+    });
+  }
+}
+function initialState() { stacks = {a:Array.from({length:n},(_,i)=>n-i), b:[], c:[]}; }
+function updateStats() {
+  $('currentMove').textContent = `${moveIndex} / ${moves.length}`;
+  $('totalMoves').textContent = moves.length;
+}
+function renderLog() {
+  const log=$('moveLog'); log.innerHTML='';
+  if (!moves.length) { log.innerHTML='<li>Choose a disk count and press Start.</li>'; return; }
+  moves.forEach((m,i)=>{
+    const li=document.createElement('li');
+    li.textContent=`${i+1}. Move disk ${m.disk}: ${m.from.toUpperCase()} → ${m.to.toUpperCase()}`;
+    if(i===moveIndex-1) li.className='active';
+    log.appendChild(li);
+  });
+  const active=log.querySelector('.active'); if(active) active.scrollIntoView({block:'nearest'});
+}
+function setButtons() {
+  $('startBtn').disabled=running && !paused;
+  $('pauseBtn').disabled=!running;
+  $('pauseBtn').textContent=paused?'▶ Resume':'Ⅱ Pause';
+  $('diskCount').disabled=running && !paused;
+}
+function resetAll() {
+  token++; clearTimeout(timer); running=false; paused=false; moveIndex=0;
+  n=+$('diskCount').value; moves=[]; initialState(); drawBoard(); renderLog(); updateStats();
+  $('status').textContent='Ready'; setButtons();
+}
+async function loadMoves() {
+  const response=await fetch('/moves?n='+n);
+  if(!response.ok) throw new Error('Could not get moves from Prolog. Check the server and choose 1–8 disks.');
+  return (await response.json()).moves;
+}
+function animateDisk(disk, from, to, myToken) {
+  return new Promise(resolve=>{
+    if(myToken!==token) return resolve(false);
+    const element=$('disk-'+disk);
+    const source=$('tower-'+from), dest=$('tower-'+to);
+    if(!element || !source || !dest) return resolve(false);
+    const s=element.getBoundingClientRect(), d=dest.getBoundingClientRect();
+    const board=document.querySelector('.board').getBoundingClientRect();
+    const startX=s.left-board.left, startY=s.top-board.top;
+    const endX=d.left-board.left+s.width/2-(d.width/2); // corrected below using tower centers
+    const sourceCenter=s.left+s.width/2-board.left;
+    const targetCenter=d.left+d.width/2-board.left;
+    const currentBottom=parseFloat(element.style.bottom)||52;
+    const lift= Math.max(10, 30);
+    const liftY=startY-lift;
+    const finalLevel=stacks[to].length;
+    const finalY=(d.bottom-board.top) - (52 + finalLevel*22) - s.height;
+    const duration=delay();
+    element.style.transition=`left ${duration/3}ms ease, top ${duration/3}ms ease`;
+    element.style.position='absolute';
+    // All disks are positioned inside their peg tower; animate using a temporary fixed overlay.
+    const overlay=document.createElement('div');
+    overlay.className='disk'; overlay.style.width=element.style.width;
+    overlay.style.height=element.style.height; overlay.style.background=element.style.background;
+    overlay.style.position='absolute'; overlay.style.zIndex=20;
+    overlay.style.left=(s.left-board.left)+'px'; overlay.style.top=(s.top-board.top)+'px';
+    overlay.style.transform='none'; overlay.style.margin=0;
+    document.querySelector('.board').appendChild(overlay);
+    element.style.visibility='hidden';
+    const total=duration;
+    overlay.style.transition=`top ${total/3}ms ease, left ${total/3}ms ease`;
+    requestAnimationFrame(()=>{
+      overlay.style.top=Math.max(4,liftY)+'px';
+      setTimeout(()=>{
+        if(myToken!==token){overlay.remove(); return resolve(false);}
+        overlay.style.left=(targetCenter-s.width/2)+'px';
+        setTimeout(()=>{
+          if(myToken!==token){overlay.remove(); return resolve(false);}
+          overlay.style.top=Math.max(4,finalY)+'px';
+          setTimeout(()=>{
+            overlay.remove(); element.style.visibility='visible'; resolve(myToken===token);
+          },total/3);
+        },total/3);
+      },total/3);
+    });
+  });
+}
+async function play(myToken) {
+  running=true; paused=false; setButtons();
+  $('status').textContent='Solving…';
+  while(moveIndex<moves.length && myToken===token) {
+    while(paused && myToken===token) await new Promise(r=>setTimeout(r,100));
+    if(myToken!==token) break;
+    const m=moves[moveIndex];
+    const diskIndex=stacks[m.from].lastIndexOf(m.disk);
+    if(diskIndex<0) break;
+    // Animate first, then commit the disk move and redraw the stable board.
+    const ok=await animateDisk(m.disk,m.from,m.to,myToken);
+    if(!ok || myToken!==token) break;
+    stacks[m.from].pop(); stacks[m.to].push(m.disk);
+    moveIndex++;
+    drawBoard(); renderLog(); updateStats();
+    $('status').textContent=`Move ${moveIndex} of ${moves.length}`;
+    await new Promise(r=>setTimeout(r,Math.max(80,delay()/5)));
+  }
+  if(myToken===token) {
+    running=false; paused=false;
+    $('status').textContent=moveIndex===moves.length?'✓ Completed!':'Ready';
+    setButtons();
+  }
+}
+$('startBtn').addEventListener('click', async()=>{
+  if(running && paused) { paused=false; setButtons(); return; }
+  if(running) return;
+  resetAll();
+  const myToken=token;
+  try {
+    moves=await loadMoves();
+    if(myToken!==token) return;
+    renderLog(); updateStats();
+    play(myToken);
+  } catch(e) { $('status').textContent='Prolog server not connected'; alert(e.message); }
+});
+$('pauseBtn').addEventListener('click',()=>{
+  if(!running) return;
+  paused=!paused; setButtons(); $('status').textContent=paused?'Paused':'Solving…';
+});
+$('resetBtn').addEventListener('click',resetAll);
+$('diskCount').addEventListener('change',resetAll);
+$('speed').addEventListener('input',()=>{
+  $('speedLabel').textContent=['Slow','Leisurely','Normal','Fast','Very fast'][+$('speed').value-1];
+});
+resetAll();
+</script>
+</body>
+</html>
